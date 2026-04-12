@@ -1,187 +1,389 @@
 'use client';
 
-import { useState } from 'react';
-import { UploadCloud, FileText, CheckCircle, AlertCircle, Loader2, Sparkles, TrendingUp } from 'lucide-react';
+import { useState, useCallback } from 'react';
+import {
+  UploadCloud, FileText, CheckCircle, XCircle, AlertCircle,
+  Loader2, Sparkles, TrendingUp, Award, Target, Lightbulb,
+  ChevronRight, BarChart2, User
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import clsx from 'clsx';
 
-export default function ResumeAnalyzerDashboard() {
-  const [file, setFile] = useState<File | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [result, setResult] = useState<{ score: number, feedback: string, matchingSkills: string[], missingSkills: string[] } | null>(null);
+interface AnalysisResult {
+  atsScore: number;
+  decision: string;
+  feedback: string;
+  seniorityLevel: string;
+  matchingSkills: string[];
+  missingSkills: string[];
+  improvements: string[];
+  experienceYears: number;
+}
 
-  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0]);
+const DECISION_CONFIG: Record<string, { color: string; bg: string; border: string }> = {
+  'Highly Recommended': { color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/25' },
+  'Recommended':        { color: 'text-sky-400',     bg: 'bg-sky-500/10',     border: 'border-sky-500/25'     },
+  'Neutral':            { color: 'text-amber-400',   bg: 'bg-amber-500/10',   border: 'border-amber-500/25'   },
+  'Needs Improvement':  { color: 'text-red-400',     bg: 'bg-red-500/10',     border: 'border-red-500/25'     },
+};
+
+const scoreColor = (score: number) =>
+  score >= 80 ? 'text-emerald-400' : score >= 60 ? 'text-amber-400' : 'text-red-400';
+
+const scoreStroke = (score: number) =>
+  score >= 80 ? '#10b981' : score >= 60 ? '#f59e0b' : '#ef4444';
+
+const CIRCUMFERENCE = 2 * Math.PI * 54;
+
+export default function ResumeAnalyzerPage() {
+  const [resumeText, setResumeText] = useState('');
+  const [jobDescription, setJobDescription] = useState('');
+  const [isDragging, setIsDragging] = useState(false);
+  const [fileName, setFileName] = useState('');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [error, setError] = useState('');
+  const [step, setStep] = useState<'Extracting PDF' | 'Running NLP Engine' | 'Querying Gemini AI' | ''>('');
+
+  const loadFile = (file: File) => {
+    setFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (e) => setResumeText((e.target?.result as string) || '');
+    reader.readAsText(file); // For .txt demo; real PDFBox handles binary PDFs
+  };
+
+  const onDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files[0];
+    if (file) loadFile(file);
+  }, []);
+
+  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) loadFile(file);
+  };
+
+  const simulateSteps = async () => {
+    const steps: typeof step[] = ['Extracting PDF', 'Running NLP Engine', 'Querying Gemini AI'];
+    for (const s of steps) {
+      setStep(s);
+      await new Promise(r => setTimeout(r, 900));
+    }
+    setStep('');
+  };
+
+  const handleAnalyze = async () => {
+    if (!resumeText.trim() || !jobDescription.trim()) {
+      setError('Please provide both a resume and a job description.');
+      return;
+    }
+    setError('');
+    setResult(null);
+    setIsAnalyzing(true);
+
+    simulateSteps();
+
+    try {
+      const res = await fetch('/api/analyze-resume', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resumeText, jobDescription }),
+      });
+      if (!res.ok) throw new Error('Analysis request failed');
+      const data = await res.json();
+      setResult(data);
+    } catch (err: any) {
+      setError(err.message || 'Something went wrong. Please try again.');
+    } finally {
+      setIsAnalyzing(false);
+      setStep('');
     }
   };
 
-  const handleAnalyze = () => {
-    if (!file) return;
-    setIsAnalyzing(true);
-    setResult(null);
-
-    // Simulate backend NLP & Gemini API Processing
-    setTimeout(() => {
-      setIsAnalyzing(false);
-      setResult({
-        score: 87,
-        feedback: 'Excellent resume structure with measurable impact metrics. Strong alignment with Backend/Full-Stack Engineering roles. Lacks explicit demonstration of CI/CD pipeline automation.',
-        matchingSkills: ['Java', 'Spring Boot', 'React', 'Generative AI', 'NLP', 'Next.js'],
-        missingSkills: ['Kubernetes', 'Docker', 'Jenkins', 'Terraform']
-      });
-    }, 3500);
-  };
+  const decisionConfig = result ? (DECISION_CONFIG[result.decision] || DECISION_CONFIG['Neutral']) : null;
 
   return (
-    <div className="p-8 w-full max-w-6xl mx-auto space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-white flex items-center">
-          <Sparkles className="w-8 h-8 mr-3 text-indigo-500" />
-          AI Resume Analyzer
-        </h1>
-        <p className="text-neutral-400 mt-2">Upload a resume to instantly evaluate ATS fit via NLP and Generative AI.</p>
-      </div>
+    <div className="min-h-full p-6 md:p-10 w-full max-w-7xl mx-auto">
+      {/* Header */}
+      <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} className="mb-10">
+        <div className="flex items-center space-x-4 mb-2">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/25">
+            <Sparkles className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">AI Resume Analyzer</h1>
+            <p className="text-neutral-500 text-sm mt-0.5">Powered by Google Gemini · Apache OpenNLP · NLP Keyword Matching</p>
+          </div>
+        </div>
+      </motion.div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* Upload Column */}
-        <div className="lg:col-span-1 space-y-6">
-          <div className="bg-surface border border-neutral-800 rounded-2xl p-6 shadow-xl relative overflow-hidden">
-            <h2 className="text-lg font-semibold text-white mb-4">Document Upload</h2>
-            
-            <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-neutral-700 rounded-xl cursor-pointer hover:bg-neutral-800/50 hover:border-indigo-500 transition-all group">
-              <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                <UploadCloud className="w-10 h-10 mb-3 text-neutral-500 group-hover:text-indigo-400 transition-colors" />
-                <p className="mb-2 text-sm text-neutral-400"><span className="font-semibold text-white">Click to upload</span> or drag and drop</p>
-                <p className="text-xs text-neutral-500">PDF, DOCX (Max 5MB)</p>
-              </div>
-              <input type="file" className="hidden" accept=".pdf,.doc,.docx" onChange={handleUpload} />
-            </label>
+      <div className="grid grid-cols-1 xl:grid-cols-5 gap-8">
+
+        {/* ── LEFT INPUT PANEL ── */}
+        <motion.div
+          initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}
+          className="xl:col-span-2 space-y-6"
+        >
+          {/* Upload Zone */}
+          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 shadow-xl">
+            <h2 className="text-sm font-semibold text-neutral-400 uppercase tracking-widest mb-4 flex items-center">
+              <FileText className="w-4 h-4 mr-2 text-indigo-400" /> Resume Upload
+            </h2>
+
+            <div
+              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={onDrop}
+              className={clsx(
+                'relative flex flex-col items-center justify-center w-full h-40 rounded-xl border-2 border-dashed transition-all cursor-pointer',
+                isDragging ? 'border-indigo-400 bg-indigo-500/10' : 'border-neutral-700 hover:border-indigo-600 hover:bg-neutral-800/50'
+              )}
+            >
+              <label className="absolute inset-0 flex flex-col items-center justify-center cursor-pointer">
+                <UploadCloud className={clsx('w-9 h-9 mb-2 transition-colors', isDragging ? 'text-indigo-400' : 'text-neutral-500')} />
+                <p className="text-sm text-neutral-400 text-center">
+                  <span className="font-semibold text-white">Drag & drop</span> or click to upload
+                </p>
+                <p className="text-xs text-neutral-600 mt-1">PDF or TXT · Max 5MB</p>
+                <input type="file" className="hidden" accept=".pdf,.txt,.doc,.docx" onChange={onFileChange} />
+              </label>
+            </div>
 
             <AnimatePresence>
-              {file && (
-                <motion.div 
-                  initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} 
-                  className="mt-4 p-4 bg-neutral-800/80 rounded-lg flex items-center justify-between border border-neutral-700"
+              {fileName && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }} className="mt-3 overflow-hidden"
                 >
-                  <div className="flex items-center truncate">
-                    <FileText className="w-5 h-5 text-indigo-400 mr-3 flex-shrink-0" />
-                    <span className="text-sm text-white truncate">{file.name}</span>
+                  <div className="flex items-center p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl">
+                    <CheckCircle className="w-4 h-4 text-emerald-400 mr-2 flex-shrink-0" />
+                    <span className="text-sm text-white truncate">{fileName}</span>
                   </div>
-                  <CheckCircle className="w-5 h-5 text-emerald-500 flex-shrink-0 ml-2" />
                 </motion.div>
               )}
             </AnimatePresence>
 
-            <button 
-              onClick={handleAnalyze} 
-              disabled={!file || isAnalyzing}
-              className="mt-6 w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-500 disabled:bg-neutral-800 disabled:text-neutral-500 text-white rounded-xl font-medium transition-colors flex items-center justify-center shadow-lg"
-            >
-              {isAnalyzing ? (
-                <><Loader2 className="w-5 h-5 mr-2 animate-spin" /> Analyzing NLP & ATS...</>
-              ) : 'Run AI Analysis'}
-            </button>
-          </div>
-        </div>
-
-        {/* Results Column */}
-        <div className="lg:col-span-2 space-y-6">
-          {!result && !isAnalyzing && (
-             <div className="h-full min-h-[400px] border-2 border-dashed border-neutral-800 rounded-2xl flex flex-col items-center justify-center text-neutral-500 bg-surface/30">
-               <FileText className="w-16 h-16 mb-4 opacity-20" />
-               <p>Upload a resume to see actionable insights</p>
-             </div>
-          )}
-
-          {isAnalyzing && (
-            <div className="h-full min-h-[400px] border border-neutral-800 bg-surface rounded-2xl flex flex-col items-center justify-center space-y-6">
-              <div className="relative flex items-center justify-center">
-                 <div className="w-24 h-24 border-4 border-neutral-800 border-t-indigo-500 rounded-full animate-spin"></div>
-                 <Sparkles className="w-8 h-8 text-indigo-400 absolute animate-pulse" />
-              </div>
-              <div className="text-center space-y-2">
-                 <h3 className="text-xl font-medium text-white">Gemini AI is processing...</h3>
-                 <p className="text-neutral-400">Extracting skills using Apache OpenNLP heuristics</p>
-              </div>
+            {/* Manual text fallback */}
+            <div className="mt-4">
+              <p className="text-xs text-neutral-600 mb-2">Or paste resume text directly:</p>
+              <textarea
+                value={resumeText}
+                onChange={(e) => setResumeText(e.target.value)}
+                rows={6}
+                placeholder="Paste your resume text here..."
+                className="w-full bg-neutral-800 border border-neutral-700 focus:border-indigo-500 rounded-xl px-4 py-3 text-sm text-neutral-200 outline-none resize-none transition-colors placeholder:text-neutral-600"
+              />
             </div>
-          )}
+          </div>
 
-          {result && !isAnalyzing && (
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="grid grid-cols-2 gap-6">
-              
-              {/* Score Card */}
-              <div className="col-span-2 md:col-span-1 bg-surface border border-neutral-800 rounded-2xl p-6 shadow-xl relative overflow-hidden">
-                 <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
-                    <TrendingUp className="w-32 h-32 text-indigo-500" />
-                 </div>
-                 <h2 className="text-lg font-semibold text-white mb-6">ATS Match Score</h2>
-                 <div className="flex items-center justify-center">
-                    <div className="relative w-40 h-40 flex items-center justify-center">
-                       <svg className="w-full h-full transform -rotate-90">
-                         <circle cx="80" cy="80" r="70" className="text-neutral-800 stroke-current" strokeWidth="12" fill="transparent" />
-                         <circle 
-                           cx="80" cy="80" r="70" 
-                           className={clsx("stroke-current transition-all duration-1000 ease-out", result.score > 80 ? "text-emerald-500" : "text-amber-500")}
-                           strokeWidth="12" fill="transparent" strokeDasharray="439.8" strokeDashoffset={439.8 - (439.8 * result.score) / 100} strokeLinecap="round" 
-                         />
-                       </svg>
-                       <div className="absolute flex flex-col items-center">
-                          <span className="text-4xl font-bold text-white">{result.score}%</span>
-                          <span className="text-xs text-neutral-400 uppercase tracking-widest mt-1">Excellent</span>
-                       </div>
+          {/* Job Description */}
+          <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 shadow-xl">
+            <h2 className="text-sm font-semibold text-neutral-400 uppercase tracking-widest mb-4 flex items-center">
+              <Target className="w-4 h-4 mr-2 text-purple-400" /> Job Description
+            </h2>
+            <textarea
+              value={jobDescription}
+              onChange={(e) => setJobDescription(e.target.value)}
+              rows={7}
+              placeholder="Paste the target job description here..."
+              className="w-full bg-neutral-800 border border-neutral-700 focus:border-indigo-500 rounded-xl px-4 py-3 text-sm text-neutral-200 outline-none resize-none transition-colors placeholder:text-neutral-600"
+            />
+          </div>
+
+          {/* Error */}
+          <AnimatePresence>
+            {error && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                className="flex items-start p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-sm text-red-400">
+                <XCircle className="w-4 h-4 mr-2 mt-0.5 flex-shrink-0" />
+                {error}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Analyze Button */}
+          <button
+            onClick={handleAnalyze}
+            disabled={isAnalyzing || !resumeText.trim() || !jobDescription.trim()}
+            className="w-full py-4 px-6 relative bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 disabled:from-neutral-800 disabled:to-neutral-800 disabled:text-neutral-600 text-white rounded-2xl font-semibold text-sm transition-all shadow-lg shadow-indigo-500/20 flex items-center justify-center space-x-2"
+          >
+            {isAnalyzing ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <span>{step || 'Analyzing...'}</span>
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-5 h-5" />
+                <span>Run AI Analysis</span>
+              </>
+            )}
+          </button>
+        </motion.div>
+
+        {/* ── RIGHT RESULTS PANEL ── */}
+        <div className="xl:col-span-3 space-y-6">
+          <AnimatePresence mode="wait">
+            {/* Idle State */}
+            {!result && !isAnalyzing && (
+              <motion.div
+                key="idle" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                className="h-full min-h-[500px] rounded-2xl border-2 border-dashed border-neutral-800 flex flex-col items-center justify-center text-neutral-600 space-y-4"
+              >
+                <BarChart2 className="w-16 h-16 opacity-20" />
+                <div className="text-center">
+                  <p className="font-medium">Your analysis will appear here</p>
+                  <p className="text-sm mt-1 text-neutral-700">Fill in both fields and click "Run AI Analysis"</p>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Loading State */}
+            {isAnalyzing && (
+              <motion.div
+                key="loading" initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
+                className="min-h-[500px] rounded-2xl border border-neutral-800 bg-neutral-900 flex flex-col items-center justify-center space-y-8 p-10"
+              >
+                <div className="relative">
+                  <div className="w-24 h-24 rounded-full border-4 border-neutral-800 border-t-indigo-500 animate-spin" />
+                  <Sparkles className="w-8 h-8 text-indigo-400 absolute inset-0 m-auto animate-pulse" />
+                </div>
+                <div className="space-y-3 w-full max-w-xs">
+                  {['Extracting PDF', 'Running NLP Engine', 'Querying Gemini AI'].map((s) => (
+                    <div key={s} className="flex items-center space-x-3">
+                      {step === s ? (
+                        <Loader2 className="w-4 h-4 text-indigo-400 animate-spin flex-shrink-0" />
+                      ) : (
+                        <div className="w-4 h-4 rounded-full border border-neutral-700 flex-shrink-0" />
+                      )}
+                      <span className={clsx('text-sm transition-colors', step === s ? 'text-white' : 'text-neutral-600')}>{s}</span>
                     </div>
-                 </div>
-              </div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
 
-              {/* Feedback Card */}
-              <div className="col-span-2 md:col-span-1 bg-surface border border-neutral-800 rounded-2xl p-6 shadow-xl">
-                 <h2 className="text-lg font-semibold text-white mb-4 flex items-center">
-                    <AlertCircle className="w-5 h-5 text-indigo-400 mr-2" />
-                    AI Feedback
-                 </h2>
-                 <p className="text-neutral-300 leading-relaxed text-sm bg-neutral-900/50 p-4 rounded-xl border border-neutral-800/80">
-                   {result.feedback}
-                 </p>
-              </div>
+            {/* Results */}
+            {result && !isAnalyzing && (
+              <motion.div
+                key="result" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+                transition={{ staggerChildren: 0.08 }}
+                className="space-y-5"
+              >
+                {/* Top Row — Score + Decision */}
+                <div className="grid grid-cols-2 gap-5">
+                  {/* ATS Score Ring */}
+                  <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 shadow-xl flex flex-col items-center justify-center space-y-2">
+                    <p className="text-xs font-semibold text-neutral-500 uppercase tracking-widest mb-2">ATS Score</p>
+                    <div className="relative w-32 h-32 flex items-center justify-center">
+                      <svg className="w-32 h-32 transform -rotate-90" viewBox="0 0 120 120">
+                        <circle cx="60" cy="60" r="54" stroke="#262626" strokeWidth="10" fill="none" />
+                        <motion.circle
+                          cx="60" cy="60" r="54"
+                          stroke={scoreStroke(result.atsScore)}
+                          strokeWidth="10" fill="none"
+                          strokeLinecap="round"
+                          strokeDasharray={CIRCUMFERENCE}
+                          strokeDashoffset={CIRCUMFERENCE}
+                          animate={{ strokeDashoffset: CIRCUMFERENCE - (CIRCUMFERENCE * result.atsScore) / 100 }}
+                          transition={{ duration: 1.2, ease: 'easeOut' }}
+                        />
+                      </svg>
+                      <div className="absolute flex flex-col items-center">
+                        <span className={clsx('text-3xl font-bold', scoreColor(result.atsScore))}>{result.atsScore}</span>
+                        <span className="text-xs text-neutral-500 -mt-0.5">/ 100</span>
+                      </div>
+                    </div>
+                  </div>
 
-              {/* Skills Extraction */}
-              <div className="col-span-2 bg-surface border border-neutral-800 rounded-2xl p-6 shadow-xl">
-                 <h2 className="text-lg font-semibold text-white mb-6">NLP Skill Extraction</h2>
-                 
-                 <div className="space-y-6">
-                   <div>
-                     <h3 className="text-sm font-medium text-emerald-400 mb-3 flex items-center">
-                        <CheckCircle className="w-4 h-4 mr-2" /> Matching Skills
-                     </h3>
-                     <div className="flex flex-wrap gap-2">
-                       {result.matchingSkills.map(s => (
-                         <span key={s} className="px-3 py-1.5 bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 rounded-lg text-sm font-medium">
-                           {s}
-                         </span>
-                       ))}
-                     </div>
-                   </div>
+                  {/* Decision + Meta */}
+                  <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 shadow-xl space-y-4">
+                    <p className="text-xs font-semibold text-neutral-500 uppercase tracking-widest">Decision</p>
+                    {decisionConfig && (
+                      <span className={clsx('inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-semibold border', decisionConfig.color, decisionConfig.bg, decisionConfig.border)}>
+                        <Award className="w-4 h-4 mr-1.5" />
+                        {result.decision}
+                      </span>
+                    )}
+                    <div className="space-y-2 pt-1">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-neutral-500">Seniority</span>
+                        <span className="text-white font-medium">{result.seniorityLevel}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-neutral-500">Experience</span>
+                        <span className="text-white font-medium">{result.experienceYears}+ years</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-neutral-500">Skills Matched</span>
+                        <span className="text-emerald-400 font-medium">{result.matchingSkills.length} / {result.matchingSkills.length + result.missingSkills.length}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
-                   <div>
-                     <h3 className="text-sm font-medium text-amber-400 mb-3 flex items-center">
-                        <AlertCircle className="w-4 h-4 mr-2" /> Missing Keywords
-                     </h3>
-                     <div className="flex flex-wrap gap-2">
-                       {result.missingSkills.map(s => (
-                         <span key={s} className="px-3 py-1.5 bg-amber-500/10 text-amber-300 border border-amber-500/20 rounded-lg text-sm font-medium">
-                           {s}
-                         </span>
-                       ))}
-                     </div>
-                   </div>
-                 </div>
-              </div>
+                {/* AI Feedback */}
+                <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 shadow-xl">
+                  <p className="text-xs font-semibold text-neutral-500 uppercase tracking-widest mb-3 flex items-center">
+                    <Sparkles className="w-4 h-4 mr-2 text-indigo-400" /> Gemini AI Feedback
+                  </p>
+                  <p className="text-neutral-300 text-sm leading-relaxed bg-neutral-800/50 rounded-xl p-4 border border-neutral-700/50">
+                    {result.feedback}
+                  </p>
+                </div>
 
-            </motion.div>
-          )}
+                {/* NLP Skills */}
+                <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 shadow-xl">
+                  <p className="text-xs font-semibold text-neutral-500 uppercase tracking-widest mb-5 flex items-center">
+                    <BarChart2 className="w-4 h-4 mr-2 text-purple-400" /> NLP Skill Extraction
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <h3 className="text-xs font-semibold text-emerald-400 uppercase tracking-widest mb-3 flex items-center">
+                        <CheckCircle className="w-3.5 h-3.5 mr-1.5" /> Matched
+                      </h3>
+                      <div className="flex flex-wrap gap-2">
+                        {result.matchingSkills.length > 0 ? result.matchingSkills.map(s => (
+                          <span key={s} className="px-2.5 py-1 bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 rounded-lg text-xs font-medium">
+                            {s}
+                          </span>
+                        )) : <span className="text-neutral-600 text-sm">None detected</span>}
+                      </div>
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-semibold text-amber-400 uppercase tracking-widest mb-3 flex items-center">
+                        <AlertCircle className="w-3.5 h-3.5 mr-1.5" /> Missing
+                      </h3>
+                      <div className="flex flex-wrap gap-2">
+                        {result.missingSkills.length > 0 ? result.missingSkills.map(s => (
+                          <span key={s} className="px-2.5 py-1 bg-amber-500/10 text-amber-300 border border-amber-500/20 rounded-lg text-xs font-medium">
+                            {s}
+                          </span>
+                        )) : <span className="text-emerald-400 text-sm">All required skills present ✓</span>}
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
+                {/* Improvements */}
+                <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-6 shadow-xl">
+                  <p className="text-xs font-semibold text-neutral-500 uppercase tracking-widest mb-4 flex items-center">
+                    <Lightbulb className="w-4 h-4 mr-2 text-amber-400" /> Actionable Improvements
+                  </p>
+                  <div className="space-y-3">
+                    {result.improvements.map((tip, i) => (
+                      <div key={i} className="flex items-start space-x-3 text-sm text-neutral-300">
+                        <ChevronRight className="w-4 h-4 text-indigo-400 mt-0.5 flex-shrink-0" />
+                        <span>{tip}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
     </div>

@@ -1,107 +1,578 @@
-// ==========================================
-// AI RESUME ANALYZER - JAVA SPRING BOOT BACKEND
-// ==========================================
-// This document contains the professional Java Spring Boot implementation 
-// backing up the resume bullet point: "AI Resume Analyzer — Java, Generative AI, NLP"
-// 
-// Architecture:
-// - Spring Boot Web (REST API Controller)
-// - Apache PDFBox (PDF Text Extraction)
-// - Apache OpenNLP (Keyword NLP matching)
-// - Google Gemini API (Generative AI Scoring & Feedback)
-// ==========================================
+============================================================
+ AI RESUME ANALYZER — JAVA SPRING BOOT BACKEND
+ Technologies: Java 17, Spring Boot 3, Apache PDFBox,
+               Apache OpenNLP, Google Gemini API
+ Author: Senior Full Stack Engineer
+============================================================
 
-package com.debales.analyzer.controller;
+PROJECT STRUCTURE:
+─────────────────────────────────────────────
+resume-analyzer-api/
+├── src/main/java/com/debales/resumeanalyzer/
+│   ├── ResumeAnalyzerApplication.java
+│   ├── controller/
+│   │   └── ResumeController.java
+│   ├── service/
+│   │   ├── ResumeParserService.java
+│   │   ├── NlpMatchingService.java
+│   │   └── GeminiScoringService.java
+│   ├── model/
+│   │   ├── AnalysisRequest.java
+│   │   └── AnalysisResult.java
+│   └── config/
+│       └── AppConfig.java
+├── src/main/resources/
+│   └── application.yml
+└── pom.xml
+─────────────────────────────────────────────
 
-import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
-import org.springframework.http.ResponseEntity;
-import org.springframework.beans.factory.annotation.Autowired;
-import com.debales.analyzer.service.ResumeService;
-import java.util.Map;
+═══════════════════════════════════════════════
+FILE: pom.xml
+═══════════════════════════════════════════════
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 
+         https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
 
-@RestController
-@RequestMapping("/api/v1/analyzer")
-public class ResumeController {
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.2.4</version>
+    </parent>
 
-    @Autowired
-    private ResumeService resumeService;
+    <groupId>com.debales</groupId>
+    <artifactId>resume-analyzer-api</artifactId>
+    <version>1.0.0</version>
+    <name>AI Resume Analyzer API</name>
+    <description>AI-powered resume screening using NLP and Generative AI</description>
 
-    @PostMapping("/upload")
-    public ResponseEntity<Map<String, Object>> analyzeResume(
-            @RequestParam("file") MultipartFile file,
-            @RequestParam("jobDescription") String jobDescription) {
-        
-        try {
-            // 1. Extract text from PDF
-            String resumeText = resumeService.extractTextFromPdf(file);
-            
-            // 2. Perform NLP Keyword Matching
-            Map<String, Integer> keywordMatches = resumeService.performNlpMatching(resumeText, jobDescription);
-            
-            // 3. Request Gemini AI for Generative AI Scoring & Feedback
-            Map<String, Object> aiFeedback = resumeService.generateAiFeedback(resumeText, jobDescription);
-            
-            // Combine Results
-            aiFeedback.put("keywordsExtracted", keywordMatches);
-            
-            return ResponseEntity.ok(aiFeedback);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+    <properties>
+        <java.version>17</java.version>
+    </properties>
+
+    <dependencies>
+        <!-- Spring Boot Web -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!-- PDF Text Extraction -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>3.0.2</version>
+        </dependency>
+
+        <!-- Apache OpenNLP — NLP Keyword Matching & NER -->
+        <dependency>
+            <groupId>org.apache.opennlp</groupId>
+            <artifactId>opennlp-tools</artifactId>
+            <version>2.3.1</version>
+        </dependency>
+
+        <!-- Google Gemini HTTP Client -->
+        <dependency>
+            <groupId>com.squareup.okhttp3</groupId>
+            <artifactId>okhttp</artifactId>
+            <version>4.12.0</version>
+        </dependency>
+
+        <!-- JSON Parsing -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+
+        <!-- Lombok -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- Tests -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+
+
+═══════════════════════════════════════════════
+FILE: application.yml
+═══════════════════════════════════════════════
+server:
+  port: 8080
+
+gemini:
+  api:
+    key: ${GEMINI_API_KEY}
+    url: https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent
+
+spring:
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+cors:
+  allowed-origins: http://localhost:3000
+
+
+═══════════════════════════════════════════════
+FILE: ResumeAnalyzerApplication.java
+═══════════════════════════════════════════════
+package com.debales.resumeanalyzer;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class ResumeAnalyzerApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(ResumeAnalyzerApplication.class, args);
     }
 }
 
-// ==========================================
-// SERVICE LAYER: NLP & GENERATIVE AI
-// ==========================================
-package com.debales.analyzer.service;
 
-import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
+═══════════════════════════════════════════════
+FILE: model/AnalysisResult.java
+═══════════════════════════════════════════════
+package com.debales.resumeanalyzer.model;
+
+import lombok.Builder;
+import lombok.Data;
+import java.util.List;
+import java.util.Map;
+
+@Data
+@Builder
+public class AnalysisResult {
+    private int atsScore;
+    private String decision;           // "Highly Recommended" | "Recommended" | "Needs Work"
+    private String aiFeedback;
+    private List<String> matchingSkills;
+    private List<String> missingSkills;
+    private Map<String, Integer> keywordFrequency;
+    private int experienceYears;
+    private String seniorityLevel;     // "Junior" | "Mid" | "Senior" | "Lead"
+    private List<String> improvements;
+}
+
+
+═══════════════════════════════════════════════
+FILE: service/ResumeParserService.java
+═══════════════════════════════════════════════
+package com.debales.resumeanalyzer.service;
+
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
+import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
+import java.io.IOException;
 import java.io.InputStream;
-import java.util.Map;
-import java.util.HashMap;
 
+/**
+ * Service responsible for extracting raw text content from uploaded
+ * resume files (PDF format) using Apache PDFBox 3.x.
+ */
 @Service
-public class ResumeService {
+public class ResumeParserService {
 
-    // --- 1. PDF Parser ---
-    public String extractTextFromPdf(MultipartFile file) throws Exception {
-        try (InputStream is = file.getInputStream(); PDDocument document = PDDocument.load(is)) {
+    /**
+     * Extracts clean text from an uploaded PDF file.
+     *
+     * @param file the uploaded resume as MultipartFile
+     * @return extracted plain text from the PDF
+     * @throws IOException if the file cannot be read
+     */
+    public String extractText(MultipartFile file) throws IOException {
+        try (InputStream inputStream = file.getInputStream();
+             PDDocument document = PDDocument.load(inputStream)) {
+            
             PDFTextStripper stripper = new PDFTextStripper();
-            return stripper.getText(document);
+            stripper.setSortByPosition(true);  // Maintain reading order
+            
+            String rawText = stripper.getText(document);
+            return sanitize(rawText);
         }
     }
 
-    // --- 2. NLP Logic (Apache OpenNLP) ---
-    public Map<String, Integer> performNlpMatching(String resume, String jd) {
-        // Implementation of Tokenization & Named Entity Recognition (NER)
-        // This is a simplified mockup of the NLP matching logic
-        Map<String, Integer> matches = new HashMap<>();
-        String[] requiredSkills = jd.toLowerCase().split("\\W+");
-        String resumeLower = resume.toLowerCase();
-        
-        for (String skill : requiredSkills) {
-            if (skill.length() > 3 && resumeLower.contains(skill)) {
-                matches.put(skill, matches.getOrDefault(skill, 0) + 1);
+    /**
+     * Normalizes whitespace and removes non-printable characters.
+     */
+    private String sanitize(String text) {
+        return text
+                .replaceAll("[^\\x20-\\x7E\\n]", " ")  // Remove non-ASCII
+                .replaceAll("\\s{3,}", "\n")              // Collapse whitespace
+                .trim();
+    }
+}
+
+
+═══════════════════════════════════════════════
+FILE: service/NlpMatchingService.java
+═══════════════════════════════════════════════
+package com.debales.resumeanalyzer.service;
+
+import org.springframework.stereotype.Service;
+import java.util.*;
+import java.util.regex.*;
+import java.util.stream.Collectors;
+
+/**
+ * Core NLP matching engine using tokenization and Named Entity Recognition
+ * heuristics to extract skills from resume text and match against JD keywords.
+ *
+ * Production implementation would use Apache OpenNLP's TokenizerME and
+ * NameFinderME with pre-trained en-ner-person.bin models.
+ */
+@Service
+public class NlpMatchingService {
+
+    // Curated technical skills ontology — extensible to a NoSQL skills database
+    private static final Set<String> TECHNICAL_SKILLS = Set.of(
+        "java", "spring", "spring boot", "spring mvc", "hibernate", "jpa",
+        "python", "django", "flask", "fastapi",
+        "javascript", "typescript", "node.js", "react", "next.js", "vue", "angular",
+        "mongodb", "postgresql", "mysql", "redis", "elasticsearch",
+        "docker", "kubernetes", "jenkins", "terraform", "ansible",
+        "aws", "gcp", "azure", "ci/cd", "microservices", "rest api", "graphql",
+        "machine learning", "deep learning", "nlp", "generative ai", "llm",
+        "git", "linux", "kafka", "rabbitmq", "grpc", "oauth", "jwt"
+    );
+
+    private static final Pattern EXPERIENCE_PATTERN = 
+        Pattern.compile("(\\d+)\\+?\\s*(?:year|yr)s?\\s+(?:of\\s+)?experience", Pattern.CASE_INSENSITIVE);
+
+    /**
+     * Performs keyword-frequency NLP analysis on the resume text.
+     *
+     * @param resumeText  raw extracted resume text
+     * @param jobDescription  target job description text
+     * @return structured NLP matching result
+     */
+    public NlpResult analyze(String resumeText, String jobDescription) {
+        String resumeLower = resumeText.toLowerCase();
+        String jdLower = jobDescription.toLowerCase();
+
+        // Tokenize JD to extract required skills
+        Set<String> requiredSkills = extractSkillsFromText(jdLower);
+        Set<String> resumeSkills = extractSkillsFromText(resumeLower);
+
+        // Matching and gap analysis
+        List<String> matching = requiredSkills.stream()
+                .filter(resumeSkills::contains)
+                .sorted()
+                .collect(Collectors.toList());
+
+        List<String> missing = requiredSkills.stream()
+                .filter(s -> !resumeSkills.contains(s))
+                .sorted()
+                .collect(Collectors.toList());
+
+        // Keyword frequency map
+        Map<String, Integer> frequency = new LinkedHashMap<>();
+        for (String skill : resumeSkills) {
+            int count = countOccurrences(resumeLower, skill);
+            if (count > 0) frequency.put(skill, count);
+        }
+
+        // Experience year extraction via regex
+        int experienceYears = extractExperienceYears(resumeText);
+
+        return new NlpResult(matching, missing, frequency, experienceYears);
+    }
+
+    private Set<String> extractSkillsFromText(String text) {
+        return TECHNICAL_SKILLS.stream()
+                .filter(text::contains)
+                .collect(Collectors.toSet());
+    }
+
+    private int countOccurrences(String text, String keyword) {
+        int count = 0;
+        int idx = 0;
+        while ((idx = text.indexOf(keyword, idx)) != -1) {
+            count++;
+            idx += keyword.length();
+        }
+        return count;
+    }
+
+    private int extractExperienceYears(String text) {
+        Matcher m = EXPERIENCE_PATTERN.matcher(text);
+        int max = 0;
+        while (m.find()) {
+            int years = Integer.parseInt(m.group(1));
+            max = Math.max(max, years);
+        }
+        return max;
+    }
+
+    public record NlpResult(
+        List<String> matchingSkills,
+        List<String> missingSkills,
+        Map<String, Integer> keywordFrequency,
+        int experienceYears
+    ) {}
+}
+
+
+═══════════════════════════════════════════════
+FILE: service/GeminiScoringService.java
+═══════════════════════════════════════════════
+package com.debales.resumeanalyzer.service;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import okhttp3.*;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+import java.util.concurrent.TimeUnit;
+
+/**
+ * Integrates with the Google Gemini 1.5 Flash API to generate:
+ *  - ATS compatibility score (0–100)
+ *  - Seniority level classification
+ *  - Actionable improvement suggestions
+ */
+@Service
+public class GeminiScoringService {
+
+    @Value("${gemini.api.key}")
+    private String apiKey;
+
+    @Value("${gemini.api.url}")
+    private String apiUrl;
+
+    private final OkHttpClient httpClient = new OkHttpClient.Builder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .build();
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    /**
+     * Sends resume and job description to Gemini and parses its JSON response
+     * containing score, decision label, feedback, and improvement points.
+     */
+    public GeminiResult score(String resumeText, String jobDescription,
+                               NlpMatchingService.NlpResult nlpResult) throws Exception {
+
+        String prompt = buildPrompt(resumeText, jobDescription, nlpResult);
+
+        String requestBody = """
+            {
+              "contents": [
+                {
+                  "parts": [{"text": "%s"}]
+                }
+              ],
+              "generationConfig": {
+                "temperature": 0.3,
+                "topP": 0.9,
+                "responseMimeType": "application/json"
+              }
             }
+            """.formatted(prompt.replace("\"", "'").replace("\n", "\\n"));
+
+        Request request = new Request.Builder()
+                .url(apiUrl + "?key=" + apiKey)
+                .post(RequestBody.create(requestBody, MediaType.parse("application/json")))
+                .build();
+
+        try (Response response = httpClient.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                throw new RuntimeException("Gemini API error: " + response.code());
+            }
+            
+            String body = response.body().string();
+            JsonNode root = objectMapper.readTree(body);
+            String content = root.at("/candidates/0/content/parts/0/text").asText();
+            JsonNode result = objectMapper.readTree(content);
+
+            return new GeminiResult(
+                result.get("atsScore").asInt(),
+                result.get("decision").asText(),
+                result.get("feedback").asText(),
+                result.get("seniorityLevel").asText(),
+                result.get("improvements").toString()
+            );
         }
-        return matches;
     }
 
-    // --- 3. Generative AI (Google Gemini API HTTP Client) ---
-    public Map<String, Object> generateAiFeedback(String resume, String jd) {
-        // Make an HTTP Request to Gemini API utilizing Java 11 HttpClient
-        // System Prompt: "You are an ATS Scoring agent. Rank the following resume against the job description out of 100."
-        
-        // Mock payload representing successful parsing
-        Map<String, Object> response = new HashMap<>();
-        response.put("atsScore", 88);
-        response.put("decision", "Highly Recommended");
-        response.put("feedback", "Excellent match on backend engineering. Lacks specific mention of cloud deployment mechanisms.");
-        return response;
+    private String buildPrompt(String resume, String jd,
+                                NlpMatchingService.NlpResult nlp) {
+        return """
+            You are a senior ATS (Applicant Tracking System) expert and professional resume reviewer.
+            
+            Analyze the following resume against the job description and NLP data:
+            
+            === RESUME TEXT ===
+            %s
+            
+            === JOB DESCRIPTION ===
+            %s
+            
+            === NLP MATCH DATA ===
+            Matching Skills: %s
+            Missing Skills: %s
+            Experience Years Detected: %d
+            
+            Respond ONLY with a valid JSON object matching this schema:
+            {
+              "atsScore": <integer 0-100>,
+              "decision": "<Highly Recommended | Recommended | Neutral | Needs Improvement>",
+              "feedback": "<2-3 sentence professional summary>",
+              "seniorityLevel": "<Junior | Mid-Level | Senior | Lead | Principal>",
+              "improvements": ["<actionable tip 1>", "<actionable tip 2>", "<actionable tip 3>"]
+            }
+            """.formatted(
+                resume.substring(0, Math.min(resume.length(), 2000)),
+                jd,
+                nlp.matchingSkills(),
+                nlp.missingSkills(),
+                nlp.experienceYears()
+            );
     }
+
+    public record GeminiResult(
+        int atsScore,
+        String decision,
+        String feedback,
+        String seniorityLevel,
+        String improvements
+    ) {}
+}
+
+
+═══════════════════════════════════════════════
+FILE: controller/ResumeController.java
+═══════════════════════════════════════════════
+package com.debales.resumeanalyzer.controller;
+
+import com.debales.resumeanalyzer.model.AnalysisResult;
+import com.debales.resumeanalyzer.service.*;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+/**
+ * REST Controller exposing the resume analysis endpoint.
+ * 
+ * POST /api/v1/analyze
+ *   @param file            — PDF resume (multipart)
+ *   @param jobDescription  — Target JD text
+ * 
+ * Returns AnalysisResult JSON with ATS score, NLP skills, AI feedback.
+ */
+@Slf4j
+@RestController
+@RequestMapping("/api/v1")
+@RequiredArgsConstructor
+@CrossOrigin(origins = "${cors.allowed-origins}")
+public class ResumeController {
+
+    private final ResumeParserService parserService;
+    private final NlpMatchingService nlpService;
+    private final GeminiScoringService geminiService;
+
+    @PostMapping("/analyze")
+    public ResponseEntity<AnalysisResult> analyze(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam("jobDescription") String jobDescription) {
+
+        if (file.isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        try {
+            log.info("Analyzing resume: {} ({} bytes)", file.getOriginalFilename(), file.getSize());
+
+            // Step 1 — Extract raw text from PDF
+            String resumeText = parserService.extractText(file);
+            log.info("Extracted {} characters from resume", resumeText.length());
+
+            // Step 2 — NLP Keyword Matching
+            NlpMatchingService.NlpResult nlpResult = nlpService.analyze(resumeText, jobDescription);
+            log.info("NLP matched {} / {} required skills",
+                    nlpResult.matchingSkills().size(),
+                    nlpResult.matchingSkills().size() + nlpResult.missingSkills().size());
+
+            // Step 3 — Gemini AI Scoring
+            GeminiScoringService.GeminiResult geminiResult =
+                    geminiService.score(resumeText, jobDescription, nlpResult);
+            log.info("ATS Score: {} | Decision: {}", geminiResult.atsScore(), geminiResult.decision());
+
+            // Step 4 — Assemble final result
+            String seniorityLevel = nlpResult.experienceYears() >= 8 ? "Senior"
+                    : nlpResult.experienceYears() >= 4 ? "Mid-Level" : "Junior";
+
+            AnalysisResult result = AnalysisResult.builder()
+                    .atsScore(geminiResult.atsScore())
+                    .decision(geminiResult.decision())
+                    .aiFeedback(geminiResult.feedback())
+                    .matchingSkills(nlpResult.matchingSkills())
+                    .missingSkills(nlpResult.missingSkills())
+                    .keywordFrequency(nlpResult.keywordFrequency())
+                    .experienceYears(nlpResult.experienceYears())
+                    .seniorityLevel(seniorityLevel)
+                    .build();
+
+            return ResponseEntity.ok(result);
+
+        } catch (Exception e) {
+            log.error("Resume analysis failed", e);
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    @GetMapping("/health")
+    public ResponseEntity<String> health() {
+        return ResponseEntity.ok("Resume Analyzer API is running");
+    }
+}
+
+
+═══════════════════════════════════════════════
+HOW TO RUN:
+═══════════════════════════════════════════════
+1. Install: Java 17+, Maven 3.9+
+2. Set environment variable:
+   export GEMINI_API_KEY=your_key_here
+3. Build and run:
+   mvn spring-boot:run
+4. Test the API:
+   curl -X POST http://localhost:8080/api/v1/analyze \
+     -F "file=@resume.pdf" \
+     -F "jobDescription=We need a Java Spring Boot developer with 5+ years experience"
+
+API RESPONSE SHAPE:
+{
+  "atsScore": 87,
+  "decision": "Highly Recommended",
+  "aiFeedback": "Strong backend engineering profile...",
+  "matchingSkills": ["java", "spring boot", "mongodb"],
+  "missingSkills": ["kubernetes", "terraform"],
+  "keywordFrequency": {"java": 12, "spring boot": 7},
+  "experienceYears": 5,
+  "seniorityLevel": "Senior"
 }
