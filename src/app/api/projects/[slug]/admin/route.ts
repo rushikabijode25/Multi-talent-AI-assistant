@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from 'next/dist/server/web/spec-extension/request';
+import { NextRequest, NextResponse } from 'next/server';
 import { getDashboardConfig } from '@/services/adminService';
 import { getSessionUser } from '@/lib/auth';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { slug: string } }
+  { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
     const user = await getSessionUser();

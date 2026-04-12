@@ -1,13 +1,16 @@
 'use client';
 
+import { use } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import WidgetRenderer from '@/components/admin/WidgetRenderer';
 
-export default function AdminDashboard({ params }: { params: { slug: string } }) {
+export default function AdminDashboard({ params }: { params: Promise<{ projectSlug: string }> }) {
+  const { projectSlug } = use(params);
+
   const { data: config, isLoading, error } = useQuery({
-    queryKey: ['adminConfig', params.slug],
+    queryKey: ['adminConfig', projectSlug],
     queryFn: async () => {
-      const res = await fetch(`/api/projects/${params.slug}/admin`);
+      const res = await fetch(`/api/projects/${projectSlug}/admin`);
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     }

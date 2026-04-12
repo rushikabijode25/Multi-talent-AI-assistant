@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/dist/server/web/spec-extension/request';
+import { NextRequest, NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/auth';
 import { processChatMessage } from '@/services/chatService';
 import { z } from 'zod';
@@ -13,7 +13,7 @@ const chatInputSchema = z.object({
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { slug: string } }
+  { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
     const user = await getSessionUser();

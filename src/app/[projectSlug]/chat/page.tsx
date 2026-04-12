@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, use } from 'react';
 import { Send, Bot, User, Loader2 } from 'lucide-react';
 import clsx from 'clsx';
 import { useMutation } from '@tanstack/react-query';
@@ -12,7 +12,8 @@ interface Msg {
   isStep?: boolean;
 }
 
-export default function ChatPage({ params }: { params: { projectSlug: string } }) {
+export default function ChatPage({ params }: { params: Promise<{ projectSlug: string }> }) {
+  const { projectSlug } = use(params);
   const [messages, setMessages] = useState<Msg[]>([
     { id: 1, role: 'assistant', content: 'Hello! I am your AI assistant. How can I help you today?' }
   ]);
@@ -27,7 +28,7 @@ export default function ChatPage({ params }: { params: { projectSlug: string } }
         message: text
       };
 
-      const res = await fetch(`/api/projects/${params.projectSlug}/chat`, {
+      const res = await fetch(`/api/projects/${projectSlug}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

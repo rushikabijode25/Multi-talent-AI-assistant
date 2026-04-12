@@ -1,8 +1,8 @@
 import { LayoutDashboard, MessageSquarePlus, Settings, LogOut, Bot, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 
-export default function ProjectLayout({ children, params }: { children: React.ReactNode, params: { projectSlug: string } }) {
-  const { projectSlug } = params;
+export default async function ProjectLayout({ children, params }: { children: React.ReactNode, params: Promise<{ projectSlug: string }> }) {
+  const { projectSlug } = await params;
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background">
