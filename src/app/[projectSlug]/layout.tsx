@@ -1,4 +1,4 @@
-import { LayoutDashboard, MessageSquarePlus, Settings, LogOut, Bot, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, MessageSquarePlus, Settings, LogOut, Bot, ChevronRight, FileText } from 'lucide-react';
 import Link from 'next/link';
 
 export default async function ProjectLayout({ children, params }: { children: React.ReactNode, params: Promise<{ projectSlug: string }> }) {
@@ -24,6 +24,10 @@ export default async function ProjectLayout({ children, params }: { children: Re
             <Link href={`/${projectSlug}/admin`} className="flex items-center w-full px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-800 hover:text-white rounded-lg transition-colors group">
               <LayoutDashboard className="w-4 h-4 mr-3 text-neutral-400 group-hover:text-pink-400" />
               Admin Dashboard
+            </Link>
+            <Link href={`/${projectSlug}/resume-analyzer`} className="flex items-center w-full px-3 py-2 text-sm text-neutral-300 hover:bg-neutral-800 hover:text-white rounded-lg transition-colors group">
+              <FileText className="w-4 h-4 mr-3 text-neutral-400 group-hover:text-amber-400" />
+              Resume Analyzer
             </Link>
           </nav>
 
