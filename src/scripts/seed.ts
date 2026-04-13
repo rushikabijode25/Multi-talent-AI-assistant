@@ -33,8 +33,12 @@ export async function seedDatabase() {
     role: 'member',
   });
 
+  const FIXED_PROJECT_ID = '60d21b4667d0d8992e610c84';
+  const FIXED_INSTANCE_ID = '60d21b4667d0d8992e610c85';
+
   // 2. Create Project
   const project = await Project.create({
+    _id: FIXED_PROJECT_ID,
     name: 'Demo Project',
     slug: 'default-project',
     users: [
@@ -45,6 +49,7 @@ export async function seedDatabase() {
 
   // 3. Create Product Instance
   const salesInstance = await ProductInstance.create({
+    _id: FIXED_INSTANCE_ID,
     projectId: project._id,
     name: 'Sales Assistant Pro',
     productType: 'sales_assistant',

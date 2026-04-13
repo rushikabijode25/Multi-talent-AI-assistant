@@ -10,6 +10,8 @@ if (process.env.GEMINI_API_KEY) {
   genai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 }
 
+const GEMINI_MODEL = 'gemini-1.5-flash';
+
 export async function processChatMessage(
   projectId: string, 
   productInstanceId: string, 
@@ -46,7 +48,7 @@ export async function processChatMessage(
   if (genai) {
     try {
       const response = await genai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: GEMINI_MODEL,
          contents: [
            { 
              role: 'user', 
