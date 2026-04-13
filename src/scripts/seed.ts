@@ -36,7 +36,7 @@ export async function seedDatabase() {
   // 2. Create Project
   const project = await Project.create({
     name: 'Demo Project',
-    slug: 'demo',
+    slug: 'default-project',
     users: [
       { userId: adminUser._id, role: 'admin' },
       { userId: memberUser._id, role: 'member' }
@@ -64,7 +64,7 @@ export async function seedDatabase() {
 
   console.log('Database seeding complete!');
   console.log('Admin ID:', adminUser._id);
-  console.log('Project Slug: demo');
+  console.log('Project Slug: default-project');
   
   return { success: true, adminUserId: adminUser._id.toString() };
 }
